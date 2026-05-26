@@ -2,7 +2,7 @@
 
 **A unified letter grade for your GitHub repository health.**
 
-See at a glance how healthy your repos are across dependencies, CI/CD, PRs, issues, community, and documentation. Get a single score with specific recommendations for what to fix first.
+See at a glance how healthy your repos are across dependencies, CI/CD, PRs, issues, community, and documentation. Get a single score with specific recommendations for what needs to be fixed first.
 
 [![PyPI version](https://img.shields.io/pypi/v/repo-health-score.svg)](https://pypi.org/project/repo-health-score/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/repo-health-score.svg)](https://pypi.org/project/repo-health-score/)
