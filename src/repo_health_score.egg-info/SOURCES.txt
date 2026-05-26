@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 src/repo_health_score/__init__.py
@@ -20,3 +21,4 @@ src/repo_health_score/scoring/engine.py
 src/repo_health_score/scoring/issues.py
 src/repo_health_score/scoring/pulls.py
 src/repo_health_score/scoring/scanner.py
+tests/test_scoring.py

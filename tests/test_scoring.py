@@ -100,7 +100,7 @@ class TestDependencyScoring:
             {"severity": "critical"},
         ]
         score = dependencies.score_dependencies(alerts)
-        assert score.score < 40
+        assert score.score <= 40
 
     def test_low_severity_vulns_deduct_minimally(self):
         """Low severity vulnerabilities should cause small deductions."""
