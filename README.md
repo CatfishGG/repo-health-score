@@ -154,6 +154,78 @@ Weights must sum to 1.0.
 
 ---
 
+## Badge generation
+
+Embed a health score badge directly in your repo's README.
+
+**Direct URL:**
+```
+https://repo-health-score.deno.dev/badge/{owner}/{repo}.svg?score={score}&letter={grade}
+```
+
+**Example markdown:**
+```md
+[![Repo Health Score](https://repo-health-score.deno.dev/badge/owner/repo.svg?score=84&letter=B)](https://github.com/owner/repo)
+```
+
+**Colors:**
+- A → green (#4c1)
+- B → light green (#9c6)
+- C → yellow (#dfb317)
+- D → orange (#d9730d)
+- F → red (#e05c44)
+
+You can also run the badge generator locally via the web server.
+
+---
+
+## Web server
+
+Run a local API server for score history tracking and the React dashboard:
+
+```bash
+# Start the API server
+repo-health-score serve --host 0.0.0.0 --port 8000
+```
+
+The server exposes:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Health check |
+| `/repos/{owner}/{repo}/score?store=true` | GET | Scan and get current score |
+| `/repos/{owner}/{repo}/history?days=30` | GET | Score history |
+| `/repos/{owner}/{repo}/history/latest` | GET | Most recent score |
+| `/repos/{owner}/{repo}/scan` | POST | Trigger new scan |
+| `/badge/{owner}/{repo}.svg?score=X&letter=Y` | GET | SVG badge |
+
+Set `GITHUB_TOKEN` as a header or environment variable:
+```bash
+Authorization: Bearer ghp_your_token_here
+```
+
+---
+
+## React dashboard
+
+A dashboard UI is available at `dashboard/`. To run it:
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+Set `VITE_API_URL` to point to your running API server (default: `http://localhost:8000`).
+
+Features:
+- Repo cards sorted by health score
+- Click through to see score breakdown by dimension
+- Score history line chart (last 30 days)
+- Badge with copy-to-clipboard markdown for embedding
+
+---
+
 ## Authentication
 
 ### Personal Access Token (PAT)

@@ -14,15 +14,40 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 
 # ─── Router ───────────────────────────────────────────────────────────────────
 
 router = APIRouter()
+
+# In-memory state store for CSRF protection (per-server, single-process)
+# For production, use a shared Redis store or signed cookies
+_oauth_state_store: dict[str, float] = {}
+_STATE_TTL_SECONDS = 600
+
+
+def _generate_state() -> str:
+    """Generate a cryptographically random OAuth state parameter."""
+    state = secrets.token_urlsafe(24)
+    import time
+    _oauth_state_store[state] = time.monotonic()
+    return state
+
+
+def _validate_state(state: str) -> bool:
+    """Validate and consume a state parameter (single-use)."""
+    import time
+    if state not in _oauth_state_store:
+        return False
+    expiry = _oauth_state_store.pop(state)
+    if time.monotonic() - expiry > _STATE_TTL_SECONDS:
+        return False
+    return True
 
 
 def _authenticator():
@@ -35,6 +60,7 @@ def _authenticator():
 
 @router.get("/oauth/callback")
 async def oauth_callback(
+    request: Request,
     code: str = Query(..., description="Authorization code from GitHub"),
     state: str = Query("", description="CSRF state token"),
 ):
@@ -42,6 +68,13 @@ async def oauth_callback(
     Handle the OAuth callback from GitHub.
     Exchanges the code for an access token and redirects to a success page.
     """
+    # Validate CSRF state to prevent cross-site request forgery
+    if not _validate_state(state):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired OAuth state. Please try installing again.",
+        )
+
     auth = _authenticator()
 
     try:
@@ -81,7 +114,8 @@ async def install_app():
     Redirect the user to GitHub to authorize / install the GitHub App.
     """
     auth = _authenticator()
-    url, _ = auth.get_authorization_url()
+    state = _generate_state()
+    url, _ = auth.get_authorization_url(state=state)
     return RedirectResponse(url, status_code=302)
 
 

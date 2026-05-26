@@ -72,8 +72,8 @@ def score_documentation(
     pushed_at = repo_data.get("pushed_at")
     if pushed_at:
         try:
-            last_push = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
-            days_since_push = (datetime.now(timezone.utc) - last_push.replace(tzinfo=None)).days
+            last_push = datetime.fromisoformat(pushed_at.replace("Z", "+00:00")).replace(tzinfo=None)
+            days_since_push = (datetime.now(timezone.utc).replace(tzinfo=None) - last_push).days
             details["last_push_days"] = days_since_push
 
             # If repo hasn't been pushed in a long time, docs are likely stale

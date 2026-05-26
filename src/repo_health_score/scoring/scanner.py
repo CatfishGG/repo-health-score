@@ -134,7 +134,9 @@ def scan_repo(
     # === Community ===
     if config.include_community:
         try:
-            comm_score = community.score_community(repo_data, [], [])
+            comm_score = community.score_community(
+                repo_data, open_prs, open_issues, client=gh
+            )
             dimension_scores.append(comm_score)
         except Exception as e:
             dimension_scores.append(
@@ -181,7 +183,7 @@ def scan_repo(
 def _fetch_readme(client: GitHubClient, owner: str, repo: str, default_branch: str) -> Optional[str]:
     """Fetch README content if it exists."""
     readme_names = [
-        "README.md", "README.md", "README.txt",
+        "README.md", "README.txt",
         "readme.md", "Readme.md", "README.MD",
     ]
 
@@ -195,7 +197,7 @@ def _fetch_readme(client: GitHubClient, owner: str, repo: str, default_branch: s
                 data = resp.json()
                 if isinstance(data, dict) and data.get("encoding") == "base64":
                     import base64
-                    content = base64.b64decode(data["content"]).decode("utf-8", errors="ignore")
+                    content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
                     return content
         except Exception:
             continue

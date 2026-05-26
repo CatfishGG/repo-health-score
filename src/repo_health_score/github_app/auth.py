@@ -299,7 +299,7 @@ class GitHubAppAuthenticator:
 
     def get_app_jwt(self) -> str:
         """Generate a JWT for GitHub App API authentication."""
-        return _generate_jwt(self._app_id, self._private_key)
+        return _generate_jwt(self.app_id, self.private_key)
 
     def get_installation_token(self, installation_id: str) -> InstallationTokenInfo:
         """
@@ -314,7 +314,7 @@ class GitHubAppAuthenticator:
                 return info
 
         # Generate fresh token
-        jwt_token = self.get_app_jwt()
+        jwt_token = _generate_jwt(self.app_id, self.private_key)
         response = requests.post(
             f"{self.GITHUB_API_URL}/app/installations/{installation_id}/access_tokens",
             headers={
@@ -351,7 +351,7 @@ class GitHubAppAuthenticator:
         Raises ValueError if no installation is found.
         """
         # First, find installations for the app
-        jwt_token = self._generate_jwt(self._app_id, self._private_key)
+        jwt_token = _generate_jwt(self.app_id, self.private_key)
         response = requests.get(
             f"{self.GITHUB_API_URL}/app/installations",
             headers={
@@ -391,6 +391,6 @@ class GitHubAppAuthenticator:
             "Is the App installed on this repository?"
         )
 
-    # Backward-compat alias
+    # Backward-compat alias (points to module-level function)
     def _generate_jwt(self, app_id: str, private_key: str) -> str:
         return _generate_jwt(app_id, private_key)
