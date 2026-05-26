@@ -12,6 +12,35 @@ from repo_health_score.scoring.scanner import scan_repo, ScannerConfig
 from repo_health_score.scoring.engine import RepoHealthReport
 
 
+def _get_github_client(token: str) -> "GitHubClient":
+    """Create a GitHub client from a PAT."""
+    from repo_health_score.github.client import GitHubClient
+    return GitHubClient.from_pat(token)
+
+
+def _get_app_client() -> "GitHubClient":
+    """
+    Create a GitHub client authenticated via GitHub App.
+    Raises ValueError if App credentials are missing or no installation is found.
+    """
+    from repo_health_score.github_app.auth import GitHubAppAuthenticator
+    from repo_health_score.github.client import GitHubClient
+
+    auth = GitHubAppAuthenticator()
+
+    # Load stored OAuth token to know the target account
+    token_info = auth.load_oauth_token("default")
+    if not token_info:
+        raise ValueError(
+            "No GitHub App OAuth token found. Run `python -m repo_health_score.github_app.app` "
+            "and open http://localhost:8484/install to authenticate first."
+        )
+
+    # For now, use the OAuth token to determine which installation to use.
+    # The CLI needs owner/repo to look up the installation.
+    return GitHubAppClientWrapper(auth)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="repo-health-score",
@@ -22,6 +51,13 @@ def main():
         "repo",
         nargs="?",
         help="Repository in format 'owner/repo'. Defaults to all repos for a user.",
+    )
+    parser.add_argument(
+        "--app",
+        action="store_true",
+        help="Use GitHub App authentication instead of PAT. "
+             "Requires GITHUB_APP_* environment variables and prior OAuth link via "
+             "python -m repo_health_score.github_app.app",
     )
     parser.add_argument(
         "--token", "-t",
@@ -57,11 +93,42 @@ def main():
         help="Repos to exclude from scan (for --all-repos or --user).",
     )
 
+    # Server options (used with serve command)
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind the web server to (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to run the web server on (default: 8000).",
+    )
+
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=["serve", "scan"],
+        help="Command to run: 'serve' starts the web server.",
+    )
+
     args = parser.parse_args()
 
+    # Handle serve command
+    if args.command == "serve":
+        _run_server(args)
+        return
+
     token = args.token or os.environ.get("GITHUB_TOKEN")
-    if not token:
-        print("Error: No GitHub token provided. Set GITHUB_TOKEN env var or use --token.")
+    use_app = args.app
+
+    if use_app:
+        client = _get_app_client()
+        token = "<github-app>"  # placeholder, actual auth handled via wrapper
+    elif not token:
+        print("Error: No GitHub token provided. Set GITHUB_TOKEN env var or use --token.", file=sys.stderr)
+        print("Or use --app for GitHub App authentication.", file=sys.stderr)
         sys.exit(1)
 
     # Parse custom weights if provided
@@ -71,7 +138,7 @@ def main():
         try:
             custom_weights = json_lib.loads(args.weights)
         except Exception as e:
-            print(f"Error: Invalid weights JSON: {e}")
+            print(f"Error: Invalid weights JSON: {e}", file=sys.stderr)
             sys.exit(1)
 
     config = ScannerConfig(custom_weights=custom_weights)
@@ -79,18 +146,21 @@ def main():
     # If --all-repos or --user, scan multiple repos
     if args.all_repos or args.user:
         target = args.user or "me"
-        _scan_all_repos(token, target, config, args)
+        _scan_all_repos(token, target, config, args, use_app=use_app)
         return
 
     # Single repo mode
     if not args.repo:
-        print("Error: Either provide a repo (owner/repo) or use --all-repos / --user.")
+        print("Error: Either provide a repo (owner/repo) or use --all-repos / --user.", file=sys.stderr)
         sys.exit(1)
 
     owner, repo = args.repo.split("/")
 
     print(f"Scanning {owner}/{repo}...")
-    report = scan_repo(owner, repo, token, config)
+    if use_app:
+        report = scan_repo(owner, repo, client=client, config=config)
+    else:
+        report = scan_repo(owner, repo, token, config=config)
 
     if args.output == "json":
         print(json.dumps(report.to_dict(), indent=2))
@@ -105,14 +175,36 @@ def main():
         print(f"\nJSON output written to {args.json_output}")
 
 
-def _scan_all_repos(token: str, target: str, config: ScannerConfig, args):
+def _run_server(args):
+    """Run the FastAPI web server."""
+    import uvicorn
+
+    host = getattr(args, "host", "127.0.0.1")
+    port = getattr(args, "port", 8000)
+
+    print(f"Starting Repo Health Score API server on {host}:{port}")
+    uvicorn.run(
+        "repo_health_score.web.app:app",
+        host=host,
+        port=port,
+        reload=False,
+    )
+
+
+def _scan_all_repos(token: str, target: str, config: ScannerConfig, args, use_app: bool = False):
     """Scan all repos for a user or org."""
     from repo_health_score.github.client import GitHubClient
 
-    client = GitHubClient.from_pat(token)
+
+    if use_app:
+        scanner_client = _get_app_client()
+        scanner_token = "<github-app>"
+    else:
+        scanner_client = GitHubClient.from_pat(token)
+        scanner_token = token
 
     if target == "me":
-        user_resp = client.session.get("https://api.github.com/user")
+        user_resp = scanner_client.session.get("https://api.github.com/user")
         user_resp.raise_for_status()
         username = user_resp.json().get("login")
     else:
@@ -121,9 +213,9 @@ def _scan_all_repos(token: str, target: str, config: ScannerConfig, args):
     print(f"Fetching repositories for {username}...")
 
     if target == "me" or target == username:
-        repos_data = client.get_repos(username)
+        repos_data = scanner_client.get_repos(username)
     else:
-        repos_data = client.get_org_repos(username)
+        repos_data = scanner_client.get_org_repos(username)
 
     # Filter out forks and archived if desired
     repos_data = [r for r in repos_data if not r.get("fork")]
@@ -142,7 +234,10 @@ def _scan_all_repos(token: str, target: str, config: ScannerConfig, args):
 
         try:
             print(f"  Scanning {full_name}...", end=" ", flush=True)
-            report = scan_repo(owner, repo, token, config)
+            if use_app:
+                report = scan_repo(owner, repo, client=scanner_client, config=config)
+            else:
+                report = scan_repo(owner, repo, scanner_token, config=config)
             reports.append(report)
             print(f"[{report.overall_letter} {report.overall_score:.1f}]")
         except Exception as e:
@@ -207,6 +302,68 @@ def _color_for_letter(letter: str) -> str:
 
 def _reset() -> str:
     return "\033[0m"
+
+
+class GitHubAppClientWrapper:
+    """
+    Thin wrapper that intercepts session/token access so our GitHubClient
+    logic works seamlessly with a GitHub App installation token.
+
+    The scan_repo function still expects (owner, repo, token) positional args,
+    but we intercept the session/header setup to inject the installation token.
+    """
+
+    def __init__(self, auth: "GitHubAppAuthenticator"):
+        from repo_health_score.github.client import GitHubClient
+        self.auth = auth
+        self._client: Optional[GitHubClient] = None
+        # Look up the installation ID at startup
+        self.installation_ids: list[str] = []
+        self._resolve_installations()
+
+    def _resolve_installations(self):
+        """Discover all installations for this GitHub App."""
+        jwt_token = self.auth.get_app_jwt()
+        resp = requests.get(
+            "https://api.github.com/app/installations",
+            headers={
+                "Authorization": f"Bearer {jwt_token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        resp.raise_for_status()
+        for install in resp.json():
+            self.installation_ids.append(str(install["id"]))
+
+
+    def _get_active_client(self, owner: str, repo: str) -> tuple[GitHubClient, str]:
+        """
+        Return a GitHubClient configured with a valid installation token
+        for the given repo, and the installation_id.
+        """
+        token_info = self.auth.get_installation_token_for_repo(owner, repo)
+        client = GitHubClient(token=token_info.token)
+        return client, token_info.installation_id
+
+    def __getattr__(self, name: str):
+        """
+        Proxy attribute access to a per-repo client.
+        The CLI calls methods like get_repo(), get_repos(), etc.
+        We pick a default installation for discovery, then switch based on the target repo.
+        """
+        if not self.installation_ids:
+            raise ValueError("No GitHub App installations found. Is the app installed?")
+        # Use the first installation for broad discovery
+        installation_id = self.installation_ids[0]
+        token_info = self.auth.get_installation_token(installation_id)
+        client = GitHubClient(token=token_info.token)
+        return getattr(client, name)
+
+
+def _get_app_client():
+    from repo_health_score.github_app.auth import GitHubAppAuthenticator
+    return GitHubAppClientWrapper(GitHubAppAuthenticator())
 
 
 if __name__ == "__main__":
