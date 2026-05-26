@@ -5,7 +5,7 @@ Orchestrates all scoring dimensions for a single repo.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from ..github.client import GitHubClient
 from .engine import HealthScorer, RepoHealthReport, DimensionScore
@@ -29,17 +29,22 @@ class ScannerConfig:
 def scan_repo(
     owner: str,
     repo: str,
-    token: str,
+    token: Optional[str] = None,
     config: Optional[ScannerConfig] = None,
+    *,
+    client: Optional[Any] = None,
 ) -> RepoHealthReport:
     """
     Scan a single repository and produce a health report.
 
+
     Args:
         owner: Repository owner (user or org)
         repo: Repository name
-        token: GitHub personal access token
+        token: GitHub personal access token (ignored if client is provided)
         config: Optional scanner configuration
+        client: Optional pre-configured GitHubClient (or GitHubAppClientWrapper)
+                If provided, token is ignored and the client is used directly.
 
     Returns:
         RepoHealthReport with all dimension scores and recommendations
@@ -47,10 +52,15 @@ def scan_repo(
     if config is None:
         config = ScannerConfig()
 
-    client = GitHubClient.from_pat(token)
+    if client is not None:
+        gh = client
+    elif token is not None:
+        gh = GitHubClient.from_pat(token)
+    else:
+        raise ValueError("Must provide either token or client")
 
     # Fetch all data in parallel where possible
-    repo_data = client.get_repo(owner, repo)
+    repo_data = gh.get_repo(owner, repo)
     default_branch = repo_data.get("default_branch", "main")
 
     # Dimension scores collection
@@ -59,7 +69,7 @@ def scan_repo(
     # === Dependencies ===
     if config.include_dependencies:
         try:
-            dependabot_alerts = client.get_dependabot_alerts(owner, repo)
+            dependabot_alerts = gh.get_dependabot_alerts(owner, repo)
             dep_score = dependencies.score_dependencies(dependabot_alerts)
             dimension_scores.append(dep_score)
         except Exception as e:
@@ -76,7 +86,7 @@ def scan_repo(
     # === CI/CD ===
     if config.include_ci_cd:
         try:
-            workflow_runs = client.get_workflow_runs(owner, repo, per_page=30)
+            workflow_runs = gh.get_workflow_runs(owner, repo, per_page=30)
             ci_score = ci_cd.score_ci_cd(workflow_runs)
             dimension_scores.append(ci_score)
         except Exception as e:
@@ -92,7 +102,7 @@ def scan_repo(
     # === Pull Requests ===
     if config.include_pull_requests:
         try:
-            open_prs = client.get_pulls(owner, repo, state="open")
+            open_prs = gh.get_pulls(owner, repo, state="open")
             pr_score = pulls.score_pull_requests(open_prs)
             dimension_scores.append(pr_score)
         except Exception as e:
@@ -108,7 +118,7 @@ def scan_repo(
     # === Issues ===
     if config.include_issues:
         try:
-            open_issues = client.get_issues(owner, repo, state="open")
+            open_issues = gh.get_issues(owner, repo, state="open")
             issue_score = issues.score_issues(open_issues)
             dimension_scores.append(issue_score)
         except Exception as e:
@@ -139,7 +149,7 @@ def scan_repo(
     # === Documentation ===
     if config.include_documentation:
         try:
-            readme_content = _fetch_readme(client, owner, repo, default_branch)
+            readme_content = _fetch_readme(gh, owner, repo, default_branch)
             doc_score = documentation.score_documentation(repo_data, readme_content)
             dimension_scores.append(doc_score)
         except Exception as e:

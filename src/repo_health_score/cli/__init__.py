@@ -8,6 +8,8 @@ import os
 import sys
 from typing import Optional
 
+import requests
+
 from repo_health_score.scoring.scanner import scan_repo, ScannerConfig
 from repo_health_score.scoring.engine import RepoHealthReport
 
@@ -125,7 +127,7 @@ def main():
 
     if use_app:
         client = _get_app_client()
-        token = "<github-app>"  # placeholder, actual auth handled via wrapper
+        token = "<github-app>"
     elif not token:
         print("Error: No GitHub token provided. Set GITHUB_TOKEN env var or use --token.", file=sys.stderr)
         print("Or use --app for GitHub App authentication.", file=sys.stderr)
@@ -184,7 +186,7 @@ def _run_server(args):
 
     print(f"Starting Repo Health Score API server on {host}:{port}")
     uvicorn.run(
-        "repo_health_score.web.app:app",
+        "repo_health_score.github_app.app:app",
         host=host,
         port=port,
         reload=False,
