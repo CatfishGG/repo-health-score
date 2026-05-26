@@ -1,0 +1,2 @@
+[console_scripts]
+repo-health-score = repo_health_score.cli:main
