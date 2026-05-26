@@ -41,6 +41,9 @@ repo-health-score = "repo_health_score.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [tool.black]
 line-length = 100
 
