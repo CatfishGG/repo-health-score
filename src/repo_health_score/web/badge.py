@@ -3,9 +3,10 @@ Badge generation for repo health scores.
 Generates SVG badges matching Shields.io style.
 """
 
+import html
+import re
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
-import hashlib
 
 router = APIRouter(prefix="/badge", tags=["badge"])
 
@@ -33,8 +34,11 @@ def generate_badge_svg(letter: str, score: float, owner: str, repo: str) -> str:
     color = LETTER_COLORS.get(letter, "#9c6")
     text_color = LETTER_TEXT_COLORS.get(letter, "#fff")
 
-    label = f"{owner}/{repo}"
-    grade_text = letter
+    # Sanitize all user-controlled text before embedding in SVG
+    safe_owner = _sanitize_svg_text(owner)
+    safe_repo = _sanitize_svg_text(repo)
+    label = f"{safe_owner}/{safe_repo}"
+    grade_text = _sanitize_svg_text(letter)
     score_text = f"{score:.0f}"
 
     # Approximate text widths for sizing
@@ -74,6 +78,17 @@ def generate_badge_svg(letter: str, score: float, owner: str, repo: str) -> str:
     return svg
 
 
+_OWNER_REPO_RE = re.compile(r"^[a-zA-Z0-9_.-]+$")
+
+
+def _sanitize_svg_text(value: str) -> str:
+    """
+    Sanitize user input for safe embedding in SVG text elements.
+    Escapes < > & " ' to prevent SVG-injected content and XSS.
+    """
+    return html.escape(value, quote=True)
+
+
 @router.get("/{owner}/{repo}.svg")
 def get_badge(
     owner: str,
@@ -91,6 +106,13 @@ def get_badge(
         raise HTTPException(status_code=400, detail="Score must be between 0 and 100")
     if letter not in LETTER_COLORS:
         raise HTTPException(status_code=400, detail="Letter must be A, B, C, D, or F")
+    if not _OWNER_REPO_RE.match(owner) or not _OWNER_REPO_RE.match(repo):
+        raise HTTPException(
+            status_code=400,
+            detail="owner and repo must contain only alphanumeric characters, hyphens, underscores, and periods."
+        )
+    if len(owner) > 100 or len(repo) > 100:
+        raise HTTPException(status_code=400, detail="owner and repo must be 100 characters or fewer.")
 
     svg = generate_badge_svg(letter, score, owner, repo)
     return Response(

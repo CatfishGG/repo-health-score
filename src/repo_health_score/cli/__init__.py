@@ -6,13 +6,16 @@ import argparse
 import json
 import os
 import sys
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import requests
 
 from repo_health_score.github.client import GitHubClient
-from repo_health_score.scoring.scanner import scan_repo, ScannerConfig
-from repo_health_score.scoring.engine import RepoHealthReport
+from repo_health_score.scoring.scanner import ScannerConfig, scan_repo
+from repo_health_score.scoring.engine import HealthScorer, RepoHealthReport
+
+if TYPE_CHECKING:
+    from repo_health_score.github_app.auth import GitHubAppAuthenticator
 
 
 def _get_github_client(token: str) -> "GitHubClient":
@@ -21,13 +24,12 @@ def _get_github_client(token: str) -> "GitHubClient":
     return GitHubClient.from_pat(token)
 
 
-def _get_app_client() -> "GitHubClient":
+def _get_app_client():
     """
     Create a GitHub client authenticated via GitHub App.
     Raises ValueError if App credentials are missing or no installation is found.
     """
     from repo_health_score.github_app.auth import GitHubAppAuthenticator
-    from repo_health_score.github.client import GitHubClient
 
     auth = GitHubAppAuthenticator()
 
@@ -42,6 +44,66 @@ def _get_app_client() -> "GitHubClient":
     # For now, use the OAuth token to determine which installation to use.
     # The CLI needs owner/repo to look up the installation.
     return GitHubAppClientWrapper(auth)
+
+
+class GitHubAppClientWrapper:
+    """
+    Thin wrapper that intercepts session/token access so our GitHubClient
+    logic works seamlessly with a GitHub App installation token.
+
+    The scan_repo function still expects (owner, repo, token) positional args,
+    but we intercept the session/header setup to inject the installation token.
+    """
+
+    def __init__(self, auth: "GitHubAppAuthenticator"):
+        self.auth = auth
+        self._client: Optional[GitHubClient] = None
+        # Look up the installation ID at startup
+        self.installation_ids: list[str] = []
+        self._resolve_installations()
+
+    def _resolve_installations(self):
+        """Discover all installations for this GitHub App."""
+        jwt_token = self.auth.get_app_jwt()
+        resp = requests.get(
+            "https://api.github.com/app/installations",
+            headers={
+                "Authorization": f"Bearer {jwt_token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        resp.raise_for_status()
+        for install in resp.json():
+            self.installation_ids.append(str(install["id"]))
+
+    def _get_active_client(self, owner: str, repo: str) -> tuple["GitHubClient", str]:
+        """
+        Return a GitHubClient configured with a valid installation token
+        for the given repo, and the installation_id.
+        """
+        token_info = self.auth.get_installation_token_for_repo(owner, repo)
+        client = GitHubClient(token=token_info.token)
+        return client, token_info.installation_id
+
+    def __getattr__(self, name: str):
+        """
+        Proxy attribute access to a per-repo client.
+        The CLI calls methods like get_repo(), get_repos(), etc.
+        We pick a default installation for discovery, then switch based on the target repo.
+        """
+        if not self.installation_ids:
+            raise ValueError("No GitHub App installations found. Is the app installed?")
+        # Use the first installation for broad discovery
+        installation_id = self.installation_ids[0]
+        token_info = self.auth.get_installation_token(installation_id)
+        client = GitHubClient(token=token_info.token)
+        return getattr(client, name)
+
+
+def _get_app_client():
+    from repo_health_score.github_app.auth import GitHubAppAuthenticator
+    return GitHubAppClientWrapper(GitHubAppAuthenticator())
 
 
 def main():
@@ -142,6 +204,14 @@ def main():
             custom_weights = json_lib.loads(args.weights)
         except Exception as e:
             print(f"Error: Invalid weights JSON: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # Validate weights with HealthScorer
+    if custom_weights:
+        try:
+            HealthScorer(custom_weights=custom_weights)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
 
     config = ScannerConfig(custom_weights=custom_weights)
@@ -305,67 +375,6 @@ def _color_for_letter(letter: str) -> str:
 
 def _reset() -> str:
     return "\033[0m"
-
-
-class GitHubAppClientWrapper:
-    """
-    Thin wrapper that intercepts session/token access so our GitHubClient
-    logic works seamlessly with a GitHub App installation token.
-
-    The scan_repo function still expects (owner, repo, token) positional args,
-    but we intercept the session/header setup to inject the installation token.
-    """
-
-    def __init__(self, auth: "GitHubAppAuthenticator"):
-        self.auth = auth
-        self._client: Optional[GitHubClient] = None
-        # Look up the installation ID at startup
-        self.installation_ids: list[str] = []
-        self._resolve_installations()
-
-    def _resolve_installations(self):
-        """Discover all installations for this GitHub App."""
-        jwt_token = self.auth.get_app_jwt()
-        resp = requests.get(
-            "https://api.github.com/app/installations",
-            headers={
-                "Authorization": f"Bearer {jwt_token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-        )
-        resp.raise_for_status()
-        for install in resp.json():
-            self.installation_ids.append(str(install["id"]))
-
-
-    def _get_active_client(self, owner: str, repo: str) -> tuple[GitHubClient, str]:
-        """
-        Return a GitHubClient configured with a valid installation token
-        for the given repo, and the installation_id.
-        """
-        token_info = self.auth.get_installation_token_for_repo(owner, repo)
-        client = GitHubClient(token=token_info.token)
-        return client, token_info.installation_id
-
-    def __getattr__(self, name: str):
-        """
-        Proxy attribute access to a per-repo client.
-        The CLI calls methods like get_repo(), get_repos(), etc.
-        We pick a default installation for discovery, then switch based on the target repo.
-        """
-        if not self.installation_ids:
-            raise ValueError("No GitHub App installations found. Is the app installed?")
-        # Use the first installation for broad discovery
-        installation_id = self.installation_ids[0]
-        token_info = self.auth.get_installation_token(installation_id)
-        client = GitHubClient(token=token_info.token)
-        return getattr(client, name)
-
-
-def _get_app_client():
-    from repo_health_score.github_app.auth import GitHubAppAuthenticator
-    return GitHubAppClientWrapper(GitHubAppAuthenticator())
 
 
 if __name__ == "__main__":

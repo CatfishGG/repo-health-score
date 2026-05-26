@@ -3,7 +3,7 @@ Pull request health scoring.
 Measures PR age, stale labels, review turnaround, and overall PR management.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from .engine import DimensionScore
 
 
@@ -62,9 +62,6 @@ def score_pull_requests(pulls: list[dict]) -> DimensionScore:
     score = 100.0
 
     # Stale PRs penalty
-    stale_ratio = stale_prs / len(pulls)
-    very_stale_ratio = very_stale_prs / len(pulls)
-
     score -= stale_prs * 5
     score -= very_stale_prs * 10
 

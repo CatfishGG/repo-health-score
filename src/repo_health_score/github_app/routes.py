@@ -15,9 +15,8 @@ import hmac
 import json
 import os
 import secrets
-from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 
@@ -78,14 +77,14 @@ async def oauth_callback(
     auth = _authenticator()
 
     try:
-        token_info = auth.exchange_and_store_token(code, key="default")
+        auth.exchange_and_store_token(code, key="default")
     except Exception as exc:
         return HTMLResponse(
             f"<html><body><h1>OAuth Error</h1><p>{exc}</p></body></html>",
             status_code=400,
         )
 
-    html = f"""
+    html = """
     <!DOCTYPE html>
     <html>
     <head><title>GitHub App Connected</title></head>
@@ -95,10 +94,10 @@ async def oauth_callback(
     <p>Access token acquired. You can now close this window and use the CLI.</p>
     <script>
         // Attempt to signalopener tab / parent
-        if (window.opener) {{
+        if (window.opener) {
             window.opener.postMessage("github_app_connected", "*");
             window.close();
-        }}
+        }
     </script>
     </body>
     </html>
@@ -127,22 +126,26 @@ async def webhook(request: Request):
     Receive GitHub App webhook events.
     Validates the signature and dispatches to handlers.
     """
-    # Load secrets
-    app_id = os.environ.get("GITHUB_APP_APP_ID")
-    private_key = os.environ.get("GITHUB_APP_PRIVATE_KEY")
-    webhook_secret = os.environ.get("GITHUB_APP_WEBHOOK_SECRET", "")
+    webhook_secret = os.environ.get("GITHUB_APP_WEBHOOK_SECRET")
 
     body = await request.body()
     headers = dict(request.headers)
 
-    # Validate signature if secret is configured
-    if webhook_secret:
-        signature = headers.get("x-hub-signature-256", "")
-        expected = "sha256=" + hmac.new(
-            webhook_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    # Reject webhooks without a secret configured (webhook_secret == "" means unset)
+    if webhook_secret is None:
+        raise HTTPException(
+            status_code=500,
+            detail="GITHUB_APP_WEBHOOK_SECRET is not configured. "
+                    "Set it in GitHub App settings to secure webhook delivery.",
+        )
+
+    # Validate signature
+    signature = headers.get("x-hub-signature-256", "")
+    expected = "sha256=" + hmac.new(
+        webhook_secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     event = headers.get("x-github-event", "unknown")
     delivery_id = headers.get("x-github-delivery", "")
@@ -173,7 +176,7 @@ async def _handle_installation_event(payload: dict, auth) -> JSONResponse:
         # App was installed or new permissions granted
         # Store the installation
         try:
-            token_info = auth.get_installation_token(installation_id)
+            auth.get_installation_token(installation_id)
             return JSONResponse({
                 "ok": True,
                 "message": f"Installation {installation_id} for {account_login} activated.",
@@ -240,12 +243,13 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
 
+    allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:8484").split(",")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type", "X-GitHub-Event", "X-GitHub-Delivery", "X-Hub-Signature-256"],
     )
 
     # Mount routes at root

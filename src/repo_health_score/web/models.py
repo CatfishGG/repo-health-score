@@ -39,6 +39,15 @@ class HistoryEntryResponse(BaseModel):
     scanned_at: datetime
 
 
+class RepoListEntry(BaseModel):
+    """A repo entry in the list response."""
+    owner: str
+    repo: str
+    overall_score: float
+    overall_letter: str
+    scanned_at: Optional[datetime] = None
+
+
 class ScanRequest(BaseModel):
     """Request body for triggering a scan."""
     token: Optional[str] = None  # GitHub token; can also be set via GITHUB_TOKEN env

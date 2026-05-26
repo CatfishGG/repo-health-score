@@ -70,9 +70,6 @@ def score_community(
     details["has_issue_templates"] = has_issue_templates
     details["has_pr_templates"] = has_pr_templates
 
-    # Count contributors (approximate, from the repo data)
-    has_contributors = repo_data.get("subscribers_count", 0) > 0 or \
-                       repo_data.get("stargazers_count", 0) > 0
     details["contributors"] = 0  # Would need separate API call for accurate count
 
     # Response rate on PRs and issues (if data available)
@@ -109,11 +106,14 @@ def score_community(
 def _check_file_exists(client: "GitHubClient", owner: str, repo: str, path: str) -> bool:
     """
     Check if a file or directory exists in the repo via the GitHub Contents API.
+    Uses a direct session request with a fixed timeout (no rate-limit retry — this is
+    a best-effort existence check, not a critical data fetch).
     """
     try:
         resp = client.session.get(
             f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
             headers={"Accept": "application/vnd.github+json"},
+            timeout=10.0,
         )
         return resp.status_code == 200
     except Exception:

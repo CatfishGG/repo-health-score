@@ -61,9 +61,6 @@ def score_issues(issues: list[dict]) -> DimensionScore:
     # Score: start at 100, penalise issues
     score = 100.0
 
-    stale_ratio = stale_issues / len(issues)
-    very_stale_ratio = very_stale_issues / len(issues)
-
     score -= stale_issues * 4
     score -= very_stale_issues * 8
 

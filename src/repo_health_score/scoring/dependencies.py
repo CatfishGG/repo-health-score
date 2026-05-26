@@ -3,7 +3,6 @@ Dependency freshness and security scoring.
 Checks Dependabot alerts, manifest staleness, and known vulnerabilities.
 """
 
-from datetime import datetime, timedelta
 from typing import Optional
 
 from .engine import DimensionScore
@@ -25,7 +24,6 @@ def score_dependencies(
     """
     score = 100.0
     details = {}
-    recommendations = []
 
     # Parse alert counts
     critical_vulns = sum(

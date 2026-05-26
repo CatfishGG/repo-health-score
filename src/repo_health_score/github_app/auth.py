@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -365,10 +364,7 @@ class GitHubAppAuthenticator:
 
         # Find matching installation
         for install in installations:
-            account = install.get("account", {})
             # Check if this installation has access to the target repo
-            target_perms = install.get("permissions", {})
-            # We need to check repos separately via installation
             install_id = str(install["id"])
 
             # Check which repos this installation can access

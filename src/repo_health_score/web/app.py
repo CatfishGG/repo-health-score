@@ -10,12 +10,13 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import init_db, store_score, get_history, get_latest_score
+from .database import init_db, store_score, get_history, get_latest_score, get_all_repos
 from .models import (
     ScoreResponse,
     HistoryEntryResponse,
     HealthResponse,
     DimensionResponseModel,
+    RepoListEntry,
 )
 from .badge import router as badge_router
 from ..scoring.scanner import scan_repo, ScannerConfig
@@ -30,13 +31,17 @@ app = FastAPI(
     version=__version__,
 )
 
-# Add CORS middleware
+# Add CORS middleware — restrict origins in production via ALLOWED_ORIGINS env var
+allowed_origins = os.environ.get("ALLOWED_ORIGINS", "").split(",")
+if not allowed_origins or allowed_origins == [""]:
+    allowed_origins = ["http://localhost:3000", "http://localhost:8000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Include badge routes
@@ -53,6 +58,25 @@ def startup_event():
 def health_check():
     """Health check endpoint."""
     return HealthResponse(status="ok", version=__version__)
+
+
+@app.get("/repos", response_model=list[RepoListEntry], tags=["repos"])
+def list_repos(limit: int = Query(100, ge=1, le=1000, description="Max repos to return")):
+    """
+    List all repositories that have at least one stored score, with their most recent score.
+    Sorted by score ascending (worst repos first).
+    """
+    rows = get_all_repos(limit=limit)
+    return [
+        RepoListEntry(
+            owner=row["owner"],
+            repo=row["repo"],
+            overall_score=row["overall_score"],
+            overall_letter=row["overall_letter"],
+            scanned_at=datetime.fromisoformat(row["scanned_at"]) if row.get("scanned_at") else None,
+        )
+        for row in rows
+    ]
 
 
 def _get_token(token: Optional[str] = None) -> str:

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..github.client import GitHubClient
+from ..github.client import GitHubClient, GitHubAPIRateLimitExceeded
 from .engine import HealthScorer, RepoHealthReport, DimensionScore
 from . import dependencies, ci_cd, pulls, issues, community, documentation
 
@@ -66,12 +66,26 @@ def scan_repo(
     # Dimension scores collection
     dimension_scores: list[DimensionScore] = []
 
+    # Pre-fetch PRs and issues so community scoring can use them even if those dimensions are disabled
+    open_prs: list[dict] = []
+    open_issues: list[dict] = []
+    try:
+        open_prs = gh.get_pulls(owner, repo, state="open")
+    except Exception:
+        pass
+    try:
+        open_issues = gh.get_issues(owner, repo, state="open")
+    except Exception:
+        pass
+
     # === Dependencies ===
     if config.include_dependencies:
         try:
             dependabot_alerts = gh.get_dependabot_alerts(owner, repo)
             dep_score = dependencies.score_dependencies(dependabot_alerts)
             dimension_scores.append(dep_score)
+        except GitHubAPIRateLimitExceeded:
+            raise  # Re-raise rate limit — caller should handle it
         except Exception as e:
             # Dependabot might not be enabled — score conservatively
             dimension_scores.append(
@@ -89,6 +103,8 @@ def scan_repo(
             workflow_runs = gh.get_workflow_runs(owner, repo, per_page=30)
             ci_score = ci_cd.score_ci_cd(workflow_runs)
             dimension_scores.append(ci_score)
+        except GitHubAPIRateLimitExceeded:
+            raise
         except Exception as e:
             dimension_scores.append(
                 DimensionScore(
@@ -105,6 +121,8 @@ def scan_repo(
             open_prs = gh.get_pulls(owner, repo, state="open")
             pr_score = pulls.score_pull_requests(open_prs)
             dimension_scores.append(pr_score)
+        except GitHubAPIRateLimitExceeded:
+            raise
         except Exception as e:
             dimension_scores.append(
                 DimensionScore(
@@ -121,6 +139,8 @@ def scan_repo(
             open_issues = gh.get_issues(owner, repo, state="open")
             issue_score = issues.score_issues(open_issues)
             dimension_scores.append(issue_score)
+        except GitHubAPIRateLimitExceeded:
+            raise
         except Exception as e:
             dimension_scores.append(
                 DimensionScore(
@@ -138,6 +158,8 @@ def scan_repo(
                 repo_data, open_prs, open_issues, client=gh
             )
             dimension_scores.append(comm_score)
+        except GitHubAPIRateLimitExceeded:
+            raise
         except Exception as e:
             dimension_scores.append(
                 DimensionScore(
@@ -154,6 +176,8 @@ def scan_repo(
             readme_content = _fetch_readme(gh, owner, repo, default_branch)
             doc_score = documentation.score_documentation(repo_data, readme_content)
             dimension_scores.append(doc_score)
+        except GitHubAPIRateLimitExceeded:
+            raise
         except Exception as e:
             dimension_scores.append(
                 DimensionScore(

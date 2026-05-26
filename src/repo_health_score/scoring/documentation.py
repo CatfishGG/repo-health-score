@@ -3,7 +3,7 @@ Documentation health scoring.
 Measures README presence, doc freshness, and overall documentation quality.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from .engine import DimensionScore
 
 
@@ -25,7 +25,6 @@ def score_documentation(
     """
     score = 100.0
     details = {}
-    recommendations = []
 
     # Check README existence
     has_readme = readme_content is not None or repo_data.get("has_wiki", False)

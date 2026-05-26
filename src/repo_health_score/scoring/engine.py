@@ -5,7 +5,7 @@ Aggregates dimension scores into a single letter grade.
 
 from dataclasses import dataclass, field
 from typing import Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -75,8 +75,22 @@ class HealthScorer:
         "documentation": 0.10,
     }
 
+    VALID_DIMENSIONS = frozenset(DEFAULT_WEIGHTS.keys())
+
     def __init__(self, custom_weights: Optional[dict] = None):
         if custom_weights:
+            # Validate: all keys must be known dimension names
+            unknown = set(custom_weights.keys()) - self.VALID_DIMENSIONS
+            if unknown:
+                raise ValueError(
+                    f"Unknown dimension(s) in custom_weights: {sorted(unknown)}. "
+                    f"Valid dimensions: {sorted(self.VALID_DIMENSIONS)}"
+                )
+            total = sum(custom_weights.values())
+            if not (0.99 <= total <= 1.01):  # allow small floating-point error
+                raise ValueError(
+                    f"custom_weights must sum to 1.0, got {total:.4f}"
+                )
             self.weights = custom_weights
         else:
             self.weights = self.DEFAULT_WEIGHTS.copy()

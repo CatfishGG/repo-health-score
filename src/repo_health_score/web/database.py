@@ -109,3 +109,24 @@ def get_latest_score(owner: str, repo: str) -> Optional[dict]:
         """, (owner, repo))
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def get_all_repos(limit: int = 100) -> list[dict]:
+    """
+    Get the most recent score entry for each unique repo in the database.
+    Ordered by overall_score ascending (worst first).
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM score_history s1
+            WHERE scanned_at = (
+                SELECT MAX(scanned_at)
+                FROM score_history s2
+                WHERE s2.owner = s1.owner AND s2.repo = s1.repo
+            )
+            ORDER BY overall_score ASC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]

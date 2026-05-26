@@ -3,9 +3,8 @@ Package manager manifest detection.
 Auto-detects what package managers a repo uses.
 """
 
+import os
 from dataclasses import dataclass
-from typing import Optional
-from pathlib import Path
 
 
 DETECTORS = {
@@ -112,6 +111,3 @@ class PackageManifest:
                     break
 
         return detected
-
-
-import os
