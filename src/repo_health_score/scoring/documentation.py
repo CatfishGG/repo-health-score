@@ -3,7 +3,7 @@ Documentation health scoring.
 Measures README presence, doc freshness, and overall documentation quality.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from .engine import DimensionScore
 
 
@@ -73,7 +73,7 @@ def score_documentation(
     if pushed_at:
         try:
             last_push = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
-            days_since_push = (datetime.utcnow() - last_push.replace(tzinfo=None)).days
+            days_since_push = (datetime.now(timezone.utc) - last_push.replace(tzinfo=None)).days
             details["last_push_days"] = days_since_push
 
             # If repo hasn't been pushed in a long time, docs are likely stale

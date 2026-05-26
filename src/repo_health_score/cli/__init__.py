@@ -10,6 +10,7 @@ from typing import Optional
 
 import requests
 
+from repo_health_score.github.client import GitHubClient
 from repo_health_score.scoring.scanner import scan_repo, ScannerConfig
 from repo_health_score.scoring.engine import RepoHealthReport
 
@@ -316,7 +317,6 @@ class GitHubAppClientWrapper:
     """
 
     def __init__(self, auth: "GitHubAppAuthenticator"):
-        from repo_health_score.github.client import GitHubClient
         self.auth = auth
         self._client: Optional[GitHubClient] = None
         # Look up the installation ID at startup

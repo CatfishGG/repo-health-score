@@ -4,7 +4,7 @@ Orchestrates all scoring dimensions for a single repo.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ..github.client import GitHubClient
@@ -174,7 +174,7 @@ def scan_repo(
         overall_letter=overall_letter,
         dimensions=dimension_scores,
         recommendations=recommendations,
-        scanned_at=datetime.utcnow(),
+        scanned_at=datetime.now(timezone.utc),
     )
 
 

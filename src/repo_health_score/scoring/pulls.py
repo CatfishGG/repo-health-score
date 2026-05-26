@@ -3,7 +3,7 @@ Pull request health scoring.
 Measures PR age, stale labels, review turnaround, and overall PR management.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from .engine import DimensionScore
 
 
@@ -25,7 +25,7 @@ def score_pull_requests(pulls: list[dict]) -> DimensionScore:
             details={"note": "No open pull requests"},
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     stale_threshold_days = 30
     very_stale_threshold_days = 60
 
@@ -40,8 +40,8 @@ def score_pull_requests(pulls: list[dict]) -> DimensionScore:
             continue
 
         try:
-            created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            age_days = (now - created.replace(tzinfo=None)).days
+            created = datetime.fromisoformat(created_at.replace("Z", "+00:00")).replace(tzinfo=None)
+            age_days = (now.replace(tzinfo=None) - created).days
             total_age_days += age_days
 
             if age_days > very_stale_threshold_days:

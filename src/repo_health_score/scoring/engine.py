@@ -5,7 +5,7 @@ Aggregates dimension scores into a single letter grade.
 
 from dataclasses import dataclass, field
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 @dataclass
@@ -37,7 +37,7 @@ class RepoHealthReport:
     overall_letter: str
     dimensions: list[DimensionScore]
     recommendations: list[str]
-    scanned_at: datetime = field(default_factory=datetime.utcnow)
+    scanned_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {

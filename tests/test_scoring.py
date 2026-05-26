@@ -119,8 +119,8 @@ class TestPRScoring:
 
     def test_old_prs_deduct_score(self):
         """PRs older than 30 days should reduce the score."""
-        from datetime import datetime, timedelta
-        old_date = (datetime.utcnow() - timedelta(days=45)).isoformat() + "Z"
+        from datetime import datetime, timedelta, timezone
+        old_date = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat().replace("+00:00", "Z")
         prs = [{"created_at": old_date, "comments": 0, "review_comments": 0}]
         score = pulls.score_pull_requests(prs)
         assert score.score < 100.0

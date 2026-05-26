@@ -3,7 +3,7 @@ Issue health scoring.
 Measures issue age, stale labels, and response turnaround.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from .engine import DimensionScore
 
 
@@ -25,7 +25,7 @@ def score_issues(issues: list[dict]) -> DimensionScore:
             details={"note": "No open issues"},
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     stale_threshold_days = 60
     very_stale_threshold_days = 120
 
