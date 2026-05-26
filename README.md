@@ -185,7 +185,7 @@ Run a local API server for score history tracking and the React dashboard:
 
 ```bash
 # Start the API server
-repo-health-score serve --host 0.0.0.0 --port 8000
+repo-health-score serve --host 127.0.0.1 --port 8000
 ```
 
 The server exposes:
