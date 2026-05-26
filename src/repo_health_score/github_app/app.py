@@ -5,7 +5,7 @@ Run with:
     python -m repo_health_score.github_app.app
 
 Or via uvicorn for production:
-    uvicorn repo_health_score.github_app.app:app --host 0.0.0.0 --port 8484
+    uvicorn repo_health_score.github_app.app:app --host 127.0.0.1 --port 8484
 
 Required environment variables:
     GITHUB_APP_CLIENT_ID     — from GitHub App settings
@@ -32,7 +32,7 @@ def main():
     """Run the GitHub App FastAPI server."""
     app = create_app()
 
-    host = os.environ.get("GITHUB_APP_HOST", "0.0.0.0")
+    host = os.environ.get("GITHUB_APP_HOST", "127.0.0.1")
     port = int(os.environ.get("GITHUB_APP_PORT", "8484"))
 
     uvicorn.run(app, host=host, port=port, log_level="info")

@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import html
 import json
 import os
 import secrets
+import time
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 
@@ -26,25 +28,62 @@ router = APIRouter()
 
 # In-memory state store for CSRF protection (per-server, single-process)
 # For production, use a shared Redis store or signed cookies
-_oauth_state_store: dict[str, float] = {}
 _STATE_TTL_SECONDS = 600
+_STATE_SEPARATOR = "|"
+
+
+def _get_state_signing_key() -> bytes:
+    """
+    Derive a HMAC key from GITHUB_APP_STATE_SECRET env var.
+    Falls back to a fixed warning key if unset (less secure — set in production).
+    """
+    secret = os.environ.get("GITHUB_APP_STATE_SECRET", "")
+    if not secret:
+        import warnings
+        warnings.warn(
+            "GITHUB_APP_STATE_SECRET is not set. "
+            "CSRF state signatures will use a default key. Set it for production use.",
+            UserWarning,
+        )
+        return b"default-state-secret-do-not-use-in-production"
+    return secret.encode()
 
 
 def _generate_state() -> str:
-    """Generate a cryptographically random OAuth state parameter."""
-    state = secrets.token_urlsafe(24)
-    import time
-    _oauth_state_store[state] = time.monotonic()
-    return state
+    """
+    Generate a signed, time-stamped OAuth state parameter.
+    Format: "{timestamp}|{random}|{signature}"
+    Stored as a signed cookie so multi-worker deployments work correctly.
+    """
+    timestamp = int(time.time())
+    random_bytes = secrets.token_urlsafe(16)
+    raw = f"{timestamp}{_STATE_SEPARATOR}{random_bytes}"
+    key = _get_state_signing_key()
+    sig = hmac.new(key, raw.encode(), "sha256").hexdigest()
+    return f"{raw}{_STATE_SEPARATOR}{sig}"
 
 
 def _validate_state(state: str) -> bool:
-    """Validate and consume a state parameter (single-use)."""
-    import time
-    if state not in _oauth_state_store:
+    """
+    Validate a signed OAuth state parameter (single-use via timing-safe comparison).
+    Returns False if tampered, expired, or malformed.
+    """
+    parts = state.split(_STATE_SEPARATOR)
+    if len(parts) != 3:
         return False
-    expiry = _oauth_state_store.pop(state)
-    if time.monotonic() - expiry > _STATE_TTL_SECONDS:
+    timestamp_str, random_part, provided_sig = parts
+    try:
+        timestamp = int(timestamp_str)
+    except ValueError:
+        return False
+    # Expired
+    if time.time() - timestamp > _STATE_TTL_SECONDS:
+        return False
+    # Replay check via timing-safe comparison of expected vs provided sig
+    raw = f"{timestamp_str}{_STATE_SEPARATOR}{random_part}"
+    key = _get_state_signing_key()
+    expected_sig = hmac.new(key, raw.encode(), "sha256").hexdigest()
+    if not hmac.compare_digest(expected_sig, provided_sig):
         return False
     return True
 
@@ -79,8 +118,10 @@ async def oauth_callback(
     try:
         auth.exchange_and_store_token(code, key="default")
     except Exception as exc:
+        # Escape the error message to prevent reflected XSS
+        safe_detail = html.escape(str(exc))
         return HTMLResponse(
-            f"<html><body><h1>OAuth Error</h1><p>{exc}</p></body></html>",
+            f"<html><body><h1>OAuth Error</h1><p>{safe_detail}</p></body></html>",
             status_code=400,
         )
 

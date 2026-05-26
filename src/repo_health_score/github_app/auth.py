@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
+from base64 import urlsafe_b64encode
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,6 +20,9 @@ from typing import Optional
 
 import jwt
 import requests
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
 # ─── Token storage helpers ────────────────────────────────────────────────────
@@ -33,21 +38,83 @@ def _ensure_token_dir() -> Path:
     return path
 
 
+def _get_fernet() -> Fernet | None:
+    """
+    Build a Fernet cipher from GITHUB_APP_TOKEN_ENCRYPTION_KEY.
+    The key is derived via PBKDF2 (100k iterations, SHA-256) so the env var
+    does not need to be exactly 32 base64-encoded bytes.
+    Returns None if GITHUB_APP_TOKEN_ENCRYPTION_KEY is not set (tokens stored unencrypted).
+    """
+    raw_key = os.environ.get("GITHUB_APP_TOKEN_ENCRYPTION_KEY", "")
+    if not raw_key:
+        return None
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"repo-health-score-token-store-v1",
+        iterations=100000,
+    )
+    key = kdf.derive(raw_key.encode())
+    fer = Fernet(urlsafe_b64encode(key))
+    return fer
+
+
 def _load_token_store() -> dict:
-    """Load the token store from disk, or return empty dict."""
+    """
+    Load the token store from disk.
+    Attempts Fernet decryption first (new format), falls back to raw JSON
+    (legacy unencrypted format) for backward compatibility during migration.
+    Warns if tokens are stored without encryption.
+    """
     path = _token_store_path()
-    if path.exists():
+    if not path.exists():
+        return {}
+    try:
+        raw = path.read_bytes()
+    except Exception:
+        return {}
+    fernet = _get_fernet()
+    if fernet is None:
+        # No key configured — load as unencrypted JSON
+        warnings.warn(
+            "GITHUB_APP_TOKEN_ENCRYPTION_KEY is not set. "
+            "OAuth and installation tokens will be stored in plaintext. "
+            "This is fine for local development. "
+            "Generate a key with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"",
+            UserWarning,
+        )
         try:
             return json.loads(path.read_text())
         except Exception:
             return {}
-    return {}
+    try:
+        return json.loads(fernet.decrypt(raw))
+    except InvalidToken:
+        warnings.warn(
+            "Token store decryption failed. "
+            "The GITHUB_APP_TOKEN_ENCRYPTION_KEY may have changed. Token store reset.",
+            UserWarning,
+        )
+        return {}
 
 
 def _save_token_store(store: dict) -> None:
-    """Persists token store to disk."""
+    """
+    Persists token store to disk, encrypted with Fernet if
+    GITHUB_APP_TOKEN_ENCRYPTION_KEY is set, otherwise in plaintext.
+    """
+    fernet = _get_fernet()
     path = _ensure_token_dir()
-    path.write_text(json.dumps(store, indent=2))
+    if fernet is None:
+        warnings.warn(
+            "GITHUB_APP_TOKEN_ENCRYPTION_KEY is not set. "
+            "Saving tokens in plaintext.",
+            UserWarning,
+        )
+        path.write_text(json.dumps(store, indent=2))
+    else:
+        payload = fernet.encrypt(json.dumps(store).encode())
+        path.write_bytes(payload)
 
 
 # ─── Credential helpers ──────────────────────────────────────────────────────
