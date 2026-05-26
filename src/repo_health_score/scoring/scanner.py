@@ -66,15 +66,20 @@ def scan_repo(
     # Dimension scores collection
     dimension_scores: list[DimensionScore] = []
 
-    # Pre-fetch PRs and issues so community scoring can use them even if those dimensions are disabled
+    # Pre-fetch PRs and issues so community scoring can use them even if those dimensions are disabled.
+    # Track whether each fetch succeeded to avoid double-fetching in the dimension blocks.
     open_prs: list[dict] = []
     open_issues: list[dict] = []
+    _prs_fetched = False
+    _issues_fetched = False
     try:
         open_prs = gh.get_pulls(owner, repo, state="open")
+        _prs_fetched = True
     except Exception:
         pass
     try:
         open_issues = gh.get_issues(owner, repo, state="open")
+        _issues_fetched = True
     except Exception:
         pass
 
@@ -118,7 +123,8 @@ def scan_repo(
     # === Pull Requests ===
     if config.include_pull_requests:
         try:
-            open_prs = gh.get_pulls(owner, repo, state="open")
+            if not _prs_fetched:
+                open_prs = gh.get_pulls(owner, repo, state="open")
             pr_score = pulls.score_pull_requests(open_prs)
             dimension_scores.append(pr_score)
         except GitHubAPIRateLimitExceeded:
@@ -136,7 +142,8 @@ def scan_repo(
     # === Issues ===
     if config.include_issues:
         try:
-            open_issues = gh.get_issues(owner, repo, state="open")
+            if not _issues_fetched:
+                open_issues = gh.get_issues(owner, repo, state="open")
             issue_score = issues.score_issues(open_issues)
             dimension_scores.append(issue_score)
         except GitHubAPIRateLimitExceeded:

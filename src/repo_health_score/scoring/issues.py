@@ -32,6 +32,7 @@ def score_issues(issues: list[dict]) -> DimensionScore:
     stale_issues = 0
     very_stale_issues = 0
     total_age_days = 0
+    valid_age_count = 0  # tracks issues with valid created_at for age average
     no_comments = 0
 
     for issue in issues:
@@ -40,9 +41,10 @@ def score_issues(issues: list[dict]) -> DimensionScore:
             continue
 
         try:
-            created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            age_days = (now - created.replace(tzinfo=None)).days
+            created = datetime.fromisoformat(created_at.replace("Z", "+00:00")).replace(tzinfo=None)
+            age_days = (now.replace(tzinfo=None) - created).days
             total_age_days += age_days
+            valid_age_count += 1
 
             if age_days > very_stale_threshold_days:
                 very_stale_issues += 1
@@ -56,7 +58,7 @@ def score_issues(issues: list[dict]) -> DimensionScore:
         except Exception:
             continue
 
-    avg_age_days = total_age_days / len(issues) if issues else 0
+    avg_age_days = total_age_days / valid_age_count if valid_age_count > 0 else 0
 
     # Score: start at 100, penalise issues
     score = 100.0

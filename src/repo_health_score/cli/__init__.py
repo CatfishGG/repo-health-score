@@ -18,11 +18,6 @@ if TYPE_CHECKING:
     from repo_health_score.github_app.auth import GitHubAppAuthenticator
 
 
-def _get_github_client(token: str) -> "GitHubClient":
-    """Create a GitHub client from a PAT."""
-    from repo_health_score.github.client import GitHubClient
-    return GitHubClient.from_pat(token)
-
 
 def _get_app_client():
     """
@@ -99,11 +94,6 @@ class GitHubAppClientWrapper:
         token_info = self.auth.get_installation_token(installation_id)
         client = GitHubClient(token=token_info.token)
         return getattr(client, name)
-
-
-def _get_app_client():
-    from repo_health_score.github_app.auth import GitHubAppAuthenticator
-    return GitHubAppClientWrapper(GitHubAppAuthenticator())
 
 
 def main():

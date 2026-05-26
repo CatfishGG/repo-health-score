@@ -35,7 +35,7 @@ class HistoryEntryResponse(BaseModel):
     repo: str
     overall_score: float
     overall_letter: str
-    dimensions_json: str
+    dimensions: list[DimensionResponseModel]
     scanned_at: datetime
 
 

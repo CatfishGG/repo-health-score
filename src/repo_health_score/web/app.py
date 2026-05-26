@@ -155,7 +155,7 @@ def get_repo_history(
             repo=row["repo"],
             overall_score=row["overall_score"],
             overall_letter=row["overall_letter"],
-            dimensions_json=row["dimensions_json"],
+            dimensions=[DimensionResponseModel(**d) for d in json.loads(row["dimensions_json"])],
             scanned_at=datetime.fromisoformat(row["scanned_at"]),
         )
         for row in rows

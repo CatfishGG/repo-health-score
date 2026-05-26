@@ -32,6 +32,7 @@ def score_pull_requests(pulls: list[dict]) -> DimensionScore:
     stale_prs = 0
     very_stale_prs = 0
     total_age_days = 0
+    valid_age_count = 0  # tracks PRs with valid created_at for age average
     unreviewed = 0
 
     for pr in pulls:
@@ -43,20 +44,21 @@ def score_pull_requests(pulls: list[dict]) -> DimensionScore:
             created = datetime.fromisoformat(created_at.replace("Z", "+00:00")).replace(tzinfo=None)
             age_days = (now.replace(tzinfo=None) - created).days
             total_age_days += age_days
+            valid_age_count += 1
 
             if age_days > very_stale_threshold_days:
                 very_stale_prs += 1
             elif age_days > stale_threshold_days:
                 stale_prs += 1
 
-            # Check for unreviewed PRs (no reviews)
-            if pr.get("review_comments", 0) == 0 and pr.get("comments", 0) == 0:
+            # Check for unreviewed PRs: no review comments means no code review
+            if pr.get("review_comments", 0) == 0:
                 unreviewed += 1
 
         except Exception:
             continue
 
-    avg_age_days = total_age_days / len(pulls) if pulls else 0
+    avg_age_days = total_age_days / valid_age_count if valid_age_count > 0 else 0
 
     # Score: start at 100, penalise issues
     score = 100.0

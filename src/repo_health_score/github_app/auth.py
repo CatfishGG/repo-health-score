@@ -195,6 +195,7 @@ class GitHubAppAuthenticator:
     GITHUB_API_URL = "https://api.github.com"
 
     def __init__(self):
+        self._credentials_loaded = False
         self._client_id: Optional[str] = None
         self._client_secret: Optional[str] = None
         self._app_id: Optional[str] = None
@@ -205,9 +206,10 @@ class GitHubAppAuthenticator:
 
     def _ensure_credentials(self) -> None:
         """Load credentials from environment (cached on first call)."""
-        if self._client_id is None:
+        if not self._credentials_loaded:
             self._client_id, self._client_secret, self._private_key = _get_app_credentials()
             self._app_id = _get_app_id()
+            self._credentials_loaded = True
 
     @property
     def client_id(self) -> str:
@@ -387,6 +389,4 @@ class GitHubAppAuthenticator:
             "Is the App installed on this repository?"
         )
 
-    # Backward-compat alias (points to module-level function)
-    def _generate_jwt(self, app_id: str, private_key: str) -> str:
-        return _generate_jwt(app_id, private_key)
+    # Backward-compat alias — prefer module-level _generate_jwt or get_app_jwt()

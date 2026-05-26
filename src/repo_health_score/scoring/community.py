@@ -73,22 +73,28 @@ def score_community(
     details["contributors"] = 0  # Would need separate API call for accurate count
 
     # Response rate on PRs and issues (if data available)
-    if pulls:
-        reviewed = sum(
-            1 for pr in pulls
-            if pr.get("review_comments", 0) > 0 or pr.get("comments", 0) > 0
-        )
-        response_rate = reviewed / len(pulls)
-        if response_rate < 0.5:
-            score -= 10
-        details["pr_response_rate"] = round(response_rate, 2)
+    # Skip activity penalties for archived repos — they can't accept new contributions
+    if not is_archived:
+        if pulls:
+            reviewed = sum(
+                1 for pr in pulls
+                if pr.get("review_comments", 0) > 0 or pr.get("comments", 0) > 0
+            )
+            response_rate = reviewed / len(pulls)
+            if response_rate < 0.5:
+                score -= 10
+            details["pr_response_rate"] = round(response_rate, 2)
 
-    if issues:
-        commented_issues = sum(1 for i in issues if i.get("comments", 0) > 0)
-        response_rate = commented_issues / len(issues)
-        if response_rate < 0.4:
-            score -= 10
-        details["issue_response_rate"] = round(response_rate, 2)
+        if issues:
+            commented_issues = sum(1 for i in issues if i.get("comments", 0) > 0)
+            response_rate = commented_issues / len(issues)
+            if response_rate < 0.4:
+                score -= 10
+            details["issue_response_rate"] = round(response_rate, 2)
+    else:
+        # Explicitly record N/A for activity metrics on archived repos
+        details["pr_response_rate"] = None
+        details["issue_response_rate"] = None
 
     score = max(0.0, min(100.0, score))
 

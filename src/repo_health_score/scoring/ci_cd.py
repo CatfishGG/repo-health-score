@@ -58,6 +58,7 @@ def score_ci_cd(workflow_runs: list[dict]) -> DimensionScore:
         "skipped": skipped,
         "success_rate": round(success_rate, 3),
         "failure_rate": round(failure_rate, 3),
+        "cancellation_rate": round(cancellation_rate, 3) if active_runs > 0 else 0.0,
         "avg_duration_seconds": _avg_duration(workflow_runs),
     }
 

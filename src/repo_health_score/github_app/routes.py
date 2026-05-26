@@ -173,18 +173,15 @@ async def _handle_installation_event(payload: dict, auth) -> JSONResponse:
     account_login = payload.get("account", {}).get("login", "unknown")
 
     if action in ("created", "new_permissions_accepted"):
-        # App was installed or new permissions granted
-        # Store the installation
-        try:
-            auth.get_installation_token(installation_id)
-            return JSONResponse({
-                "ok": True,
-                "message": f"Installation {installation_id} for {account_login} activated.",
-                "installation_id": installation_id,
-                "account": account_login,
-            })
-        except Exception as exc:
-            return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        # App was installed or new permissions granted — acknowledge.
+        # Token caching happens lazily on first actual API call,
+        # no need to pre-generate here.
+        return JSONResponse({
+            "ok": True,
+            "message": f"Installation {installation_id} for {account_login} activated.",
+            "installation_id": installation_id,
+            "account": account_login,
+        })
 
     if action in ("deleted", "suspend"):
         # App was uninstalled

@@ -86,6 +86,12 @@ class HealthScorer:
                     f"Unknown dimension(s) in custom_weights: {sorted(unknown)}. "
                     f"Valid dimensions: {sorted(self.VALID_DIMENSIONS)}"
                 )
+            # Validate: all 6 dimensions must be present
+            if len(custom_weights) != len(self.VALID_DIMENSIONS):
+                raise ValueError(
+                    f"custom_weights must include all {len(self.VALID_DIMENSIONS)} dimensions, "
+                    f"got {len(custom_weights)}. Provide all or none."
+                )
             total = sum(custom_weights.values())
             if not (0.99 <= total <= 1.01):  # allow small floating-point error
                 raise ValueError(
@@ -114,7 +120,10 @@ class HealthScorer:
         if total_weight == 0:
             return 0.0, "F"
 
-        final_score = total_weighted / total_weight
+        # Weights are normalised to sum to 1.0, so use 1.0 as divisor.
+        # Dividing by total_weight (e.g. 0.5 for partial weights) would
+        # artificially inflate the score.
+        final_score = total_weighted
 
         if final_score >= 90:
             letter = "A"

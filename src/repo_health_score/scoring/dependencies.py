@@ -3,21 +3,15 @@ Dependency freshness and security scoring.
 Checks Dependabot alerts, manifest staleness, and known vulnerabilities.
 """
 
-from typing import Optional
-
 from .engine import DimensionScore
 
 
-def score_dependencies(
-    dependabot_alerts: list[dict],
-    manifest_info: Optional[dict] = None,
-) -> DimensionScore:
+def score_dependencies(dependabot_alerts: list[dict]) -> DimensionScore:
     """
-    Score dependency health based on Dependabot alerts and manifest info.
+    Score dependency health based on Dependabot alerts.
 
     Args:
         dependabot_alerts: List of Dependabot alert dicts
-        manifest_info: Optional dict with detected package managers
 
     Returns:
         DimensionScore for dependencies
@@ -49,13 +43,6 @@ def score_dependencies(
 
     # Cap at minimum 0
     score = max(0.0, score)
-
-    # Penalise for no lock file (dependency staleness risk)
-    if manifest_info:
-        has_lock = manifest_info.get("has_lock_file", True)
-        if not has_lock:
-            score = max(0, score - 10)
-            details["no_lock_file"] = True
 
     details["dependabot_alerts_count"] = len(dependabot_alerts)
     details["outdated_count"] = sum(
