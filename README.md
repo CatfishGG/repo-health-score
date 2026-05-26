@@ -13,7 +13,7 @@ See at a glance how healthy your repos are across dependencies, CI/CD, PRs, issu
 
 ## Why
 
-Most developers have more than a handful of repositories. Over time, things rot silently — dependencies go out of date, PRs go stale, CI breaks and you forget, issues pile up without responses.
+Most developers have more than a handful of repositories. Over time, things rot silently: dependencies go out of date, PRs go stale, CI breaks and you forget, issues pile up without responses.
 
 You only find out when something breaks badly or you need to use that repo again.
 
@@ -64,11 +64,11 @@ That's it. You'll get a letter grade and specific recommendations for each repo.
 
 Each dimension is scored 0-100, then weighted and combined into a single letter grade:
 
-- **A** — 90-100: Excellent
-- **B** — 80-89: Good
-- **C** — 70-79: Needs attention
-- **D** — 60-69: Needs significant work
-- **F** — Below 60: Critical
+- **A** (90-100): Excellent
+- **B** (80-89): Good
+- **C** (70-79): Needs attention
+- **D** (60-69): Needs significant work
+- **F** (Below 60): Critical
 
 ---
 
@@ -285,10 +285,10 @@ For organisations needing fine-grained repo access control, use the GitHub App a
 8. Click **Create GitHub App**.
 
 9. On the resulting page:
-   - Copy the **App ID** — set as `GITHUB_APP_APP_ID`
-   - Copy the **Client ID** — set as `GITHUB_APP_CLIENT_ID`
-   - Click **Generate a new private key** — download the `.pem` file and set its contents as `GITHUB_APP_PRIVATE_KEY`
-   - Copy the **Client secret** — set as `GITHUB_APP_CLIENT_SECRET`
+   - Copy the **App ID**: set as `GITHUB_APP_APP_ID`
+   - Copy the **Client ID**: set as `GITHUB_APP_CLIENT_ID`
+   - Click **Generate a new private key**. Download the `.pem` file and set its contents as `GITHUB_APP_PRIVATE_KEY`
+   - Copy the **Client secret**: set as `GITHUB_APP_CLIENT_SECRET`
 
 #### Environment variables
 
@@ -338,7 +338,7 @@ repo-health-score --all-repos --app
 #### How the flow works
 
 1. `repo-health-score serve` starts the FastAPI server at `localhost:8484`
-2. Open `http://localhost:8484/install` — this redirects to GitHub to authorise the App
+2. Open `http://localhost:8484/install` - this redirects to GitHub to authorise the App
 3. GitHub redirects to `/oauth/callback` with an authorization code
 4. The server exchanges the code for an access token and stores it at `~/.repo_health_score/app_tokens.json`
 5. The CLI reads the stored token automatically on subsequent runs with `--app`
@@ -395,4 +395,4 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
