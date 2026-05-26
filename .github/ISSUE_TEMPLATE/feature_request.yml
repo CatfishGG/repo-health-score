@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an idea for this project
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Description
+
+        A clear description of the feature you're requesting.
+
+        ## Problem it solves
+
+        What problem does this solve? Why would this be useful?
+
+        ## Proposed solution
+
+        How you envision this being implemented.
+
+        ## Alternatives considered
+
+        Any alternative solutions you've considered.

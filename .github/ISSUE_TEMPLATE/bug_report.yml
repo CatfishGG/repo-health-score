@@ -1,0 +1,54 @@
+name: Bug report
+description: Create a report to help us improve
+title: "[Bug]: "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Description
+
+        A clear description of the bug.
+
+        ## Steps to Reproduce
+
+        1.
+        2.
+        3.
+
+        ## Expected Behavior
+
+        What you expected to happen.
+
+        ## Actual Behavior
+
+        What actually happened.
+
+        ## Environment
+
+        - OS: [e.g. Ubuntu 22.04]
+        - Python version: [e.g. 3.11]
+        - Tool version: [e.g. 0.1.0]
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: "Minimal reproduction (optional)"
+      description: "Smallest code snippet that reproduces the issue"
+      placeholder: |
+        #!/usr/bin/env python3
+        # ... minimal reproduction code ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: "Full traceback (if applicable)"
+      placeholder: |
+        Traceback (most recent call last):
+          ...
+    validations:
+      required: false
